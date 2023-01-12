@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
-/* the directories wher output files will be placed */
+/* the directories where output files will be placed */
 #define RESIZE_DIR "Resize-dir/"
 #define THUMB_DIR "Thumbnail-dir/"
 #define WATER_DIR "Watermark-dir/"
@@ -58,13 +58,12 @@ void *Processa_watermarks(void *arg)
     /* input images */
     gdImagePtr in_img;
     /* output images */
-    //gdImagePtr out_watermark_img;
+    // gdImagePtr out_watermark_img;
     /* file name of the image created and to be saved on disk	 */
     char out_file_name[100];
     char buffer[100];
     int image_index;
     info_pipe send_to_next_pipe;
-    
 
     while (1)
     {
@@ -76,7 +75,7 @@ void *Processa_watermarks(void *arg)
             // se encontrarmos um -1 acabamos a thread e passamos o -1 para a próxima
             send_to_next_pipe.image_index = -1;
             send_to_next_pipe.image_watermark = NULL;
-            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(send_to_next_pipe)); //ERRO
+            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(send_to_next_pipe)); // ERRO
             pthread_exit(NULL);
         }
 
@@ -88,7 +87,7 @@ void *Processa_watermarks(void *arg)
             send_to_next_pipe.image_watermark = read_png_file(out_file_name);
             send_to_next_pipe.image_index = image_index;
 
-            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(send_to_next_pipe)); //ERRO
+            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(send_to_next_pipe)); // ERRO
 
             continue;
         }
@@ -121,7 +120,6 @@ void *Processa_watermarks(void *arg)
 
         send_to_next_pipe.image_index = image_index;
 
-
         write(pipe_water_resize[1], &send_to_next_pipe, sizeof(info_pipe));
     }
 }
@@ -148,7 +146,7 @@ void *Processa_resizes(void *arg)
             // se encontrarmos um -1 acabamos a thread e passamos o -1 para a próxima
             send_to_next_pipe.image_index = -1;
             send_to_next_pipe.image_watermark = NULL;
-            write(pipe_resize_thumbnail[1], &send_to_next_pipe, sizeof(info_pipe)); //ERRO
+            write(pipe_resize_thumbnail[1], &send_to_next_pipe, sizeof(info_pipe)); // ERRO
             pthread_exit(NULL);
         }
 
@@ -157,8 +155,8 @@ void *Processa_resizes(void *arg)
         {
             // vamos buscar a imagem que ja existe e passamos no pipe.
             send_to_next_pipe.image_index = receive_from_pipe.image_index;
-            
-            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(info_pipe)); //ERRO
+
+            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(info_pipe)); // ERRO
             continue;
         }
 
@@ -298,7 +296,6 @@ int main(int argc, char *argv[])
     pthread_t thread_id;
     pthread_t *ids; // vetor onde vamos guardar os ids de cada thread
 
-
     pipe(pipe_main_water);
     pipe(pipe_water_resize);
     pipe(pipe_resize_thumbnail);
@@ -427,7 +424,6 @@ int main(int argc, char *argv[])
         ids[count] = thread_id;
         count++;
     }
-    
 
     // dar join de todas as threads
     for (int j = 0; j < 3 * n_threads; j++)
