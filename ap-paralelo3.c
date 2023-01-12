@@ -63,7 +63,7 @@ void *Processa_watermarks(void *arg)
     char out_file_name[100];
     char buffer[100];
     int image_index;
-    info_pipe send_to_next_pipe;
+    info_pipe *send_to_next_pipe = (info_pipe*)calloc(1,sizeof(info_pipe));
     
 
     while (1)
@@ -74,9 +74,10 @@ void *Processa_watermarks(void *arg)
         if (image_index == -1)
         {
             // se encontrarmos um -1 acabamos a thread e passamos o -1 para a próxima
-            send_to_next_pipe.image_index = -1;
-            send_to_next_pipe.image_watermark = NULL;
-            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(send_to_next_pipe)); //ERRO
+            send_to_next_pipe->image_index = -1;
+            send_to_next_pipe->image_watermark = NULL;
+            write(pipe_water_resize[1], send_to_next_pipe, sizeof(info_pipe)); //ERRO
+            free(send_to_next_pipe);
             pthread_exit(NULL);
         }
 
@@ -85,11 +86,10 @@ void *Processa_watermarks(void *arg)
         if (access(out_file_name, F_OK) != -1)
         {
             // vamos buscar a imagem que ja existe e passamos no pipe.
-            send_to_next_pipe.image_watermark = read_png_file(out_file_name);
-            send_to_next_pipe.image_index = image_index;
+            send_to_next_pipe->image_watermark = read_png_file(out_file_name);
+            send_to_next_pipe->image_index = image_index;
 
-            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(send_to_next_pipe)); //ERRO
-
+            write(pipe_water_resize[1], send_to_next_pipe, sizeof(info_pipe)); //ERRO
             continue;
         }
 
@@ -103,8 +103,8 @@ void *Processa_watermarks(void *arg)
         }
 
         /* add watermark */
-        send_to_next_pipe.image_watermark = add_watermark(in_img, watermark_img);
-        if (send_to_next_pipe.image_watermark == NULL)
+        send_to_next_pipe->image_watermark = add_watermark(in_img, watermark_img);
+        if (send_to_next_pipe->image_watermark == NULL)
         {
             fprintf(stderr, "Impossible to creat thumbnail of %s image\n", files[image_index]);
             continue;
@@ -112,17 +112,17 @@ void *Processa_watermarks(void *arg)
         else
         {
             /* save watermark */
-            if (write_png_file(send_to_next_pipe.image_watermark, out_file_name) == 0)
+            if (write_png_file(send_to_next_pipe->image_watermark, out_file_name) == 0)
             {
                 fprintf(stderr, "Impossible to write %s image\n", out_file_name);
             }
         }
         gdImageDestroy(in_img);
 
-        send_to_next_pipe.image_index = image_index;
+        send_to_next_pipe->image_index = image_index;
 
 
-        write(pipe_water_resize[1], &send_to_next_pipe, sizeof(info_pipe));
+        write(pipe_water_resize[1], send_to_next_pipe, sizeof(info_pipe));
     }
 }
 
@@ -135,34 +135,36 @@ void *Processa_resizes(void *arg)
     /* file name of the image created and to be saved on disk	 */
     char out_file_name[100];
     int image_index;
-    info_pipe send_to_next_pipe, receive_from_pipe;
+    info_pipe *send_to_next_pipe = (info_pipe*)calloc(1,sizeof(info_pipe));
+    info_pipe *receive_from_pipe = (info_pipe*)calloc(1,sizeof(info_pipe));
 
     while (1)
     {
         // vai buscar ao pipe os index
-        read(pipe_water_resize[0], &receive_from_pipe, sizeof(info_pipe));
-        image_index = receive_from_pipe.image_index;
+        read(pipe_water_resize[0], receive_from_pipe, sizeof(info_pipe));
+        image_index = receive_from_pipe->image_index;
 
         if (image_index == -1)
         {
             // se encontrarmos um -1 acabamos a thread e passamos o -1 para a próxima
-            send_to_next_pipe.image_index = -1;
-            send_to_next_pipe.image_watermark = NULL;
-            write(pipe_resize_thumbnail[1], &send_to_next_pipe, sizeof(info_pipe)); //ERRO
+            send_to_next_pipe->image_index = -1;
+            send_to_next_pipe->image_watermark = NULL;
+            write(pipe_resize_thumbnail[1], send_to_next_pipe, sizeof(info_pipe)); //ERRO
+            free(send_to_next_pipe);
+            free(receive_from_pipe);
             pthread_exit(NULL);
         }
 
         sprintf(out_file_name, "%s%s%s", DIR_NAME, RESIZE_DIR, files[image_index]);
         if (access(out_file_name, F_OK) != -1)
         {
-            // vamos buscar a imagem que ja existe e passamos no pipe.
-            send_to_next_pipe.image_index = receive_from_pipe.image_index;
             
-            write(pipe_water_resize[1], &send_to_next_pipe, sizeof(info_pipe)); //ERRO
+            write(pipe_resize_thumbnail[1], receive_from_pipe, sizeof(info_pipe)); //ERRO
+            
             continue;
         }
 
-        out_resized_img = resize_image(receive_from_pipe.image_watermark, 800);
+        out_resized_img = resize_image(receive_from_pipe->image_watermark, 800);
         if (out_resized_img == NULL)
         {
             fprintf(stderr, "Impossible to resize %s image\n", files[image_index]);
@@ -178,9 +180,7 @@ void *Processa_resizes(void *arg)
             gdImageDestroy(out_resized_img);
         }
 
-        send_to_next_pipe = receive_from_pipe;
-
-        write(pipe_resize_thumbnail[1], &send_to_next_pipe, sizeof(info_pipe));
+        write(pipe_resize_thumbnail[1], receive_from_pipe, sizeof(info_pipe));
     }
 }
 
@@ -192,26 +192,28 @@ void *Processa_Thumbnails(void *arg)
     /* file name of the image created and to be saved on disk	 */
     char out_file_name[100];
     int image_index;
-    info_pipe receive_from_pipe;
+    info_pipe *receive_from_pipe = (info_pipe*)calloc(1,sizeof(info_pipe));
 
     while (1)
     {
         // vai buscar ao pipe os index
-        read(pipe_resize_thumbnail[0], &receive_from_pipe, sizeof(info_pipe));
-        image_index = receive_from_pipe.image_index;
+        read(pipe_resize_thumbnail[0], receive_from_pipe, sizeof(info_pipe));
+        image_index = receive_from_pipe->image_index;
 
         if (image_index == -1)
         {
+            free(receive_from_pipe);
             pthread_exit(NULL);
         }
 
         sprintf(out_file_name, "%s%s%s", DIR_NAME, THUMB_DIR, files[image_index]);
         if (access(out_file_name, F_OK) != -1)
         {
+            gdImageDestroy(receive_from_pipe->image_watermark);
             continue;
         }
 
-        out_thumb_img = make_thumb(receive_from_pipe.image_watermark, 150);
+        out_thumb_img = make_thumb(receive_from_pipe->image_watermark, 150);
         if (out_thumb_img == NULL)
         {
             fprintf(stderr, "Impossible to creat thumbnail of %s image\n", files[image_index]);
@@ -225,7 +227,7 @@ void *Processa_Thumbnails(void *arg)
             }
             gdImageDestroy(out_thumb_img);
         }
-        gdImageDestroy(receive_from_pipe.image_watermark);
+        gdImageDestroy(receive_from_pipe->image_watermark);
     }
 }
 
@@ -342,7 +344,6 @@ int main(int argc, char *argv[])
 
     /* selecting the files to be processed*/
     files = verification(&n_files);
-    printf("%i\n", n_files);
 
     /*Creation of new directories*/
     NEW_RESIZE_DIR = (char *)malloc(sizeof(char) * (strlen(DIR_NAME) + strlen(RESIZE_DIR) + 1));
@@ -450,5 +451,5 @@ int main(int argc, char *argv[])
     free(NEW_THUMB_DIR);
     free(NEW_WATER_DIR);
 
-    return 1;
+    return(EXIT_SUCCESS);
 }
